@@ -8,6 +8,9 @@
 
 use TJQueue\Admin\TJQueueConsume;
 use Joomla\CMS\Log\Log;
+use Joomla\CMS\Application\CliApplication;
+use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\CMS\Factory;
 
 define('_JEXEC', 1);
 define('JPATH_BASE', dirname(__DIR__));
@@ -23,16 +26,52 @@ if (!defined('_JDEFINES'))
 	require_once JPATH_BASE . '/includes/defines.php';
 }
 
+
+// Check for presence of vendor dependencies not included in the git repository
+if (!file_exists(JPATH_LIBRARIES . '/vendor/autoload.php') || !is_dir(JPATH_ROOT . '/media/vendor')) {
+    echo file_get_contents(JPATH_ROOT . '/templates/system/build_incomplete.html');
+    exit;
+}
+
+require_once JPATH_BASE . '/includes/framework.php';
+
+// Boot the DI container
+$container = \Joomla\CMS\Factory::getContainer();
+
+// Alias the session service keys to the web session service as that is the primary session backend for this application
+// In addition to aliasing "common" service keys, we also create aliases for the PHP classes to ensure autowiring objects is supported.  This includes aliases for aliased class names, and the keys for aliased class names should be considered deprecated to be removed when the class name alias is removed as well.
+$container->alias('session.web', 'session.web.site')
+    ->alias('session', 'session.web.site')
+    ->alias('JSession', 'session.web.site')
+    ->alias(\Joomla\CMS\Session\Session::class, 'session.web.site')
+    ->alias(\Joomla\Session\Session::class, 'session.web.site')
+    ->alias(\Joomla\Session\SessionInterface::class, 'session.web.site');
+
+// Instantiate the application.
+$app = $container->get(\Joomla\CMS\Application\SiteApplication::class);
+
+// Set the application as global app
+\Joomla\CMS\Factory::$application = $app;
+
+$app->createExtensionNamespaceMap();
+
 // Get the framework.
-require_once JPATH_LIBRARIES . '/import.legacy.php';
+require_once JPATH_LIBRARIES . '/bootstrap.php';
 
 // Bootstrap the CMS libraries.
-require_once JPATH_LIBRARIES . '/cms.php';
+// require_once JPATH_LIBRARIES . '/cms.php';
 
 // Load the configuration
 require_once JPATH_CONFIGURATION . '/configuration.php';
 
 jimport('tjqueueconsume', JPATH_SITE . '/administrator/components/com_tjqueue/libraries');
+
+require_once JPATH_BASE . '/includes/defines.php';
+require_once JPATH_BASE . '/includes/framework.php';
+
+
+//~ $app = Factory::getContainer()->get(\Joomla\CMS\Application\SiteApplication::class);
+//~ $app->initialise();
 
 /**
  * TjQueue
@@ -74,10 +113,51 @@ class TJQueue extends JApplicationCli
 		);
 
 		$argv                   = getopt($shortopts, $longopts);
+
 		$this->options          = new stdClass;
 		$this->options->topic   = array_key_exists('t', $argv) ? $argv['t'] : (array_key_exists('topic', $argv) ?  $argv['topic'] : null);
 		$this->options->limit   = array_key_exists('n', $argv) ? $argv['n'] : 50;
 		$this->options->timeout = array_key_exists('s', $argv) ? $argv['s'] : (array_key_exists('timeout', $argv) ?  $argv['timeout'] : 2000);
+	}
+
+	/**
+	 * Load an object or array into the application configuration object.
+	 *
+	 * @param   mixed  $data  Either an array or object to be loaded into the configuration object.
+	 *
+	 * @return  CliApplication  Instance of $this to allow chaining.
+	 *
+	 * @since   1.7.0
+	 */
+	public function loadConfiguration($data)
+	{
+		// Load the data into the configuration object.
+		if (is_array($data))
+		{
+			$this->config->loadArray($data);
+		}
+		elseif (is_object($data))
+		{
+			$this->config->loadObject($data);
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Entry point for the script
+	 *
+	 * @return  void
+	 *
+	 * @since   3.8.6
+	 */
+	// public function doExecute()
+	// {
+
+	// }
+	public function getName()
+	{
+
 	}
 
 	/**
@@ -87,8 +167,13 @@ class TJQueue extends JApplicationCli
 	 *
 	 * @since 1.0
 	 */
-	public function execute()
+	public function doExecute()
 	{
+		PluginHelper::importPlugin('system');
+		Joomla\CMS\Factory::getApplication()->triggerEvent('onAfterInitialise');
+
+		//PluginHelper::importPlugin('system');
+
 		$log['success'] = 1;
 		$log['message'] = 'Started: Running queue cron';
 		self::writeLog($log);
@@ -147,8 +232,20 @@ class TJQueue extends JApplicationCli
 				continue;
 			}
 
+			$mailcatcherFilePath = JPATH_SITE . '/plugins/system/mailcatcher/mailer.php';
+
+			if (!file_exists($mailcatcherFilePath))
+			{
+				$log['success'] = 0;
+				$log['message'] = "Error 404- mailcatcher class file doesn't exist:" . $mailcatcherFilePath;
+				self::writeLog($log);
+				continue;
+			}
+			
+
 			try
 			{
+				require_once $mailcatcherFilePath;
 				require_once $filePath;
 
 				// Prepare class Name
@@ -240,7 +337,7 @@ class TJQueue extends JApplicationCli
 			array($category = 'tjlogs')
 		);
 
-		$priority = $data['success'] == 1 ? JLog::INFO : JLog::ERROR;
+		$priority = $data['success'] == 1 ? Log::INFO : Log::ERROR;
 		Log::add($logMessage, $priority, $category = 'tjlogs');
 	}
 }

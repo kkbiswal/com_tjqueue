@@ -8,6 +8,7 @@
 
 // No direct access
 defined('_JEXEC') or die;
+use Joomla\CMS\Factory;
 
 /**
  * TjQueue
@@ -39,7 +40,7 @@ class TjqueueCoreEmail
 			if (isset($recipients))
 			{
 				// Invoke JMail Class
-				$mailer = \JFactory::getMailer();
+				$mailer = \Factory::getMailer();
 
 				// Set cc for email
 				if (isset($content->cc))

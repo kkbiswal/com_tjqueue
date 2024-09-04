@@ -18,10 +18,10 @@ use Enqueue\Dbal\DbalMessage;
 
 // SQS
 use Enqueue\Sqs\SqsConnectionFactory;
+use Joomla\CMS\Factory;
 
 defined('JPATH_PLATFORM') or die;
 jimport('joomla.filesystem.folder');
-jimport('joomla.application.component.helper');
 
 /**
  * TJQueue Config
@@ -43,7 +43,7 @@ class TJQueueContext
 	protected function __construct()
 	{
 		$this->params  = ComponentHelper::getParams('com_tjqueue');
-		$this->jconfig = \JFactory::getConfig();
+		$this->jconfig = Factory::getConfig();
 	}
 
 	/**

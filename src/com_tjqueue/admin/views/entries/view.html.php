@@ -9,13 +9,14 @@
 
 // No direct access to this file
 defined('_JEXEC') or die('Restricted access');
+use Joomla\CMS\MVC\View\HtmlView;
 
 /**
  * TJQueue View
  *
  * @since  0.0.1
  */
-class TjqueueViewEntries extends JViewLegacy
+class TjqueueViewEntries extends HtmlView
 {
 	/**
 	 * Display the Queues view
